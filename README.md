@@ -1,70 +1,123 @@
-# Getting Started with Create React App
+# Stellar DApp — Freighter Wallet Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A React single-page app that connects to the [Freighter](https://www.freighter.app/)
+browser wallet and lets you interact with the **Stellar Testnet**: view your
+balance, fund your account, send XLM, split a bill across several people, and
+browse your recent transactions. It also includes a static Tip Jar page with a
+scannable QR code.
 
-## Available Scripts
+> ⚠️ This app runs entirely on the **Stellar Testnet**. No real funds are used.
 
-In the project directory, you can run:
+## Features
 
-### `npm start`
+- **Wallet connection** — connect and disconnect the Freighter wallet; the
+  session is restored automatically on reload while access remains granted.
+- **Balance** — fetches and displays the connected wallet's native XLM balance,
+  with a manual refresh.
+- **Testnet faucet** — request free Testnet XLM in one click via Friendbot.
+- **Send XLM** — build, sign (in Freighter), and submit a payment, with success
+  / failure feedback and the transaction hash.
+- **Split bill** — split a total equally and pay each participant their share,
+  with per-recipient status.
+- **Transaction history** — recent payments for the connected wallet, labelled
+  sent / received, each linking to the block explorer.
+- **Tip Jar** — a static donation page with a QR code (SEP-0007 pay URI).
+- **Section navigation** — each utility lives in its own navigable section.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Tech stack
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+- [React](https://react.dev/) (Create React App)
+- [`@stellar/freighter-api`](https://www.npmjs.com/package/@stellar/freighter-api) — wallet integration
+- [`@stellar/stellar-sdk`](https://www.npmjs.com/package/@stellar/stellar-sdk) — building/submitting transactions via Horizon
+- [`qrcode.react`](https://www.npmjs.com/package/qrcode.react) — Tip Jar QR code
 
-### `npm test`
+## Prerequisites
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- **Node.js 18+** and npm
+- The **[Freighter](https://www.freighter.app/) browser extension**, set to the
+  **Test Net** network (open Freighter → Settings → Network → *Test Net*)
 
-### `npm run build`
+## Setup (run locally)
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```bash
+# 1. Install dependencies
+npm install
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+# 2. Start the dev server (HTTPS — Freighter requires a secure origin)
+npm start
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+The app opens at **https://localhost:3000**. Because it is served over HTTPS
+with a self-signed certificate, your browser will show a one-time warning —
+accept it to continue.
 
-### `npm run eject`
+### Funding a Testnet account
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+After connecting, open the **Faucet** section and click *Request 10,000 XLM*, or
+use Friendbot directly:
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```
+https://friendbot.stellar.org/?addr=<YOUR_PUBLIC_KEY>
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### Other scripts
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+```bash
+npm test         # run the test suite
+npm run build    # production build into ./build
+```
 
-## Learn More
+## How it works
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+- All network calls target Testnet: Horizon at
+  `https://horizon-testnet.stellar.org` and the `TESTNET` network passphrase
+  (see [`src/components/Freighter.js`](src/components/Freighter.js)).
+- Wallet/connection state is shared app-wide via a React context
+  ([`src/components/WalletContext.js`](src/components/WalletContext.js)), so it
+  persists as you navigate between sections.
+- Transactions are built with the Stellar SDK, signed by Freighter, and
+  submitted to Horizon; the resulting hash links to
+  [Stellar Expert](https://stellar.expert/explorer/testnet).
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## Screenshots
 
-### Code Splitting
+> Screenshots live in [`screenshots/`](screenshots/). Replace the placeholder
+> files with your own captures (PNG) using the filenames below.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+### Wallet connected state
+The wallet is connected and the account address is shown.
 
-### Analyzing the Bundle Size
+![Wallet connected state](screenshots/wallet-connected.png)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+### Balance displayed
+The connected wallet's XLM balance shown in the Account section.
 
-### Making a Progressive Web App
+![Balance displayed](screenshots/balance-displayed.png)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+### Sending a Testnet transaction
+Filling in the recipient and amount, then signing in Freighter.
 
-### Advanced Configuration
+![Sending a testnet transaction](screenshots/transaction-send.png)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+### Transaction result shown to the user
+Success feedback with the transaction hash and an explorer link.
 
-### Deployment
+![Transaction result](screenshots/transaction-result.png)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+## Project structure
 
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+```
+src/
+├── App.js                        # Wraps the app in the wallet provider
+├── components/
+│   ├── WalletContext.js          # Shared connection state (connect, balance, ...)
+│   ├── Shell.js                  # App bar + section navigation
+│   ├── Account.js                # Address, balance, copy, disconnect
+│   ├── Faucet.js                 # Friendbot funding
+│   ├── SendTransaction.js        # Send XLM + result feedback
+│   ├── SplitBill.js              # Split a total and pay each share
+│   ├── TransactionHistory.js     # Recent payments
+│   ├── TipJar.js                 # Static donation page with QR code
+│   └── Freighter.js              # Stellar/Freighter service layer (Testnet)
+└── App.css                       # Styles
+```
