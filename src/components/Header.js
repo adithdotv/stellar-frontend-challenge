@@ -6,6 +6,7 @@ import {
   NETWORK,
 } from "./Freighter";
 import SendTransaction from "./SendTransaction";
+import TransactionHistory from "./TransactionHistory";
 
 const Header = () => {
   const [connected, setConnected] = useState(false);
@@ -14,6 +15,8 @@ const Header = () => {
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
+  // Bumped on connect and after a send so dependent views re-fetch.
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Re-fetch the balance for the current key (used on connect and after a send).
   const refreshBalance = useCallback(async (key) => {
@@ -30,6 +33,12 @@ const Header = () => {
       setLoadingBalance(false);
     }
   }, [publicKey]);
+
+  // Refresh balance and signal child views (e.g. history) to reload.
+  const refreshAll = useCallback(() => {
+    refreshBalance();
+    setRefreshKey((k) => k + 1);
+  }, [refreshBalance]);
 
   const handleConnect = async () => {
     setError("");
@@ -105,9 +114,11 @@ const Header = () => {
               </button>
             </div>
 
-            <SendTransaction
+            <SendTransaction publicKey={publicKey} onSent={refreshAll} />
+
+            <TransactionHistory
               publicKey={publicKey}
-              onSent={() => refreshBalance()}
+              refreshKey={refreshKey}
             />
           </>
         )}

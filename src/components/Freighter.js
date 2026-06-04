@@ -122,6 +122,72 @@ export const getXlmBalance = async (publicKey) => {
 };
 
 // ---------------------------------------------------------------------------
+// History
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the most recent payment operations involving a public key, newest
+ * first. Each entry is normalized for display with the direction relative to
+ * the connected wallet.
+ *
+ * @param {string} publicKey  The connected wallet.
+ * @param {number} [limit]    How many records to fetch (default 10).
+ * @returns {Promise<Array<{
+ *   id: string, type: string, hash: string, createdAt: string,
+ *   direction: "sent" | "received" | "self", amount: string,
+ *   asset: string, from: string, to: string
+ * }>>}
+ */
+export const getRecentPayments = async (publicKey, limit = 10) => {
+  try {
+    const { records } = await server
+      .payments()
+      .forAccount(publicKey)
+      .order("desc")
+      .limit(limit)
+      .call();
+
+    return records
+      // Keep native XLM payments and account-creation funding events.
+      .filter(
+        (op) =>
+          op.type === "payment" || op.type === "create_account"
+      )
+      .map((op) => {
+        const isCreate = op.type === "create_account";
+        const amount = isCreate ? op.starting_balance : op.amount;
+        const asset =
+          isCreate || op.asset_type === "native"
+            ? "XLM"
+            : op.asset_code || "?";
+        const from = isCreate ? op.funder : op.from;
+        const to = isCreate ? op.account : op.to;
+
+        let direction = "received";
+        if (from === publicKey && to === publicKey) direction = "self";
+        else if (from === publicKey) direction = "sent";
+
+        return {
+          id: op.id,
+          type: op.type,
+          hash: op.transaction_hash,
+          createdAt: op.created_at,
+          direction,
+          amount,
+          asset,
+          from,
+          to,
+        };
+      });
+  } catch (error) {
+    if (error?.response?.status === 404) {
+      return []; // Account not funded yet — no history.
+    }
+    throw error;
+  }
+};
+
+// ---------------------------------------------------------------------------
 // Transactions
 // ---------------------------------------------------------------------------
 
