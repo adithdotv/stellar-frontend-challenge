@@ -1,8 +1,15 @@
-import React, { useState, useCallback } from "react";
-import { connect, disconnect, getXlmBalance } from "./Freighter";
+import React, { useState, useCallback, useEffect } from "react";
+import {
+  connect,
+  disconnect,
+  getXlmBalance,
+  isWalletAllowed,
+  getPublicKey,
+} from "./Freighter";
 import SendTransaction from "./SendTransaction";
 import TransactionHistory from "./TransactionHistory";
 import Faucet from "./Faucet";
+import SplitBill from "./SplitBill";
 
 const Header = () => {
   const [connected, setConnected] = useState(false);
@@ -36,6 +43,29 @@ const Header = () => {
     refreshBalance();
     setRefreshKey((k) => k + 1);
   }, [refreshBalance]);
+
+  // Restore the session on mount (e.g. after switching pages or a reload):
+  // if Freighter still has this app authorized, re-read the key silently
+  // without prompting the user again.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        if (!(await isWalletAllowed())) return;
+        const key = await getPublicKey();
+        if (!active || !key) return;
+        setPublicKey(key);
+        setConnected(true);
+        const xlm = await getXlmBalance(key);
+        if (active) setBalance(Number(xlm).toFixed(2));
+      } catch (err) {
+        // No prior session to restore — stay disconnected.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleConnect = async () => {
     setError("");
@@ -128,6 +158,8 @@ const Header = () => {
           <Faucet publicKey={publicKey} onFunded={refreshAll} />
 
           <SendTransaction publicKey={publicKey} onSent={refreshAll} />
+
+          <SplitBill publicKey={publicKey} onSent={refreshAll} />
 
           <TransactionHistory publicKey={publicKey} refreshKey={refreshKey} />
         </>
