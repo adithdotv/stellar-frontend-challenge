@@ -1,0 +1,199 @@
+import {
+  isConnected,
+  isAllowed,
+  setAllowed,
+  requestAccess,
+  getAddress,
+  getNetwork,
+  signTransaction,
+} from "@stellar/freighter-api";
+import * as StellarSdk from "@stellar/stellar-sdk";
+
+// ---------------------------------------------------------------------------
+// Network configuration — this dApp runs against the Stellar Testnet.
+// ---------------------------------------------------------------------------
+export const HORIZON_URL = "https://horizon-testnet.stellar.org";
+export const NETWORK = "TESTNET";
+export const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET;
+
+const server = new StellarSdk.Horizon.Server(HORIZON_URL);
+
+// ---------------------------------------------------------------------------
+// Wallet detection & connection
+// ---------------------------------------------------------------------------
+
+/**
+ * True when the Freighter browser extension is installed/available.
+ */
+export const isFreighterInstalled = async () => {
+  const { isConnected: connected, error } = await isConnected();
+  if (error) throw new Error(error);
+  return connected;
+};
+
+/**
+ * Prompt the user to authorize this app, then return their public key.
+ * `requestAccess` opens the Freighter popup the first time; afterwards it
+ * resolves immediately with the granted address.
+ */
+export const connect = async () => {
+  if (!(await isFreighterInstalled())) {
+    throw new Error(
+      "Freighter wallet was not detected. Install it from freighter.app and refresh."
+    );
+  }
+
+  const { address, error } = await requestAccess();
+  if (error) throw new Error(error);
+  if (!address) throw new Error("Connection was rejected in Freighter.");
+
+  return address;
+};
+
+/**
+ * Read the currently-authorized public key without prompting.
+ * Returns "" when the app has not been granted access yet.
+ */
+export const getPublicKey = async () => {
+  const { address, error } = await getAddress();
+  if (error) throw new Error(error);
+  return address || "";
+};
+
+/**
+ * Whether the app already has permission to talk to the wallet.
+ */
+export const isWalletAllowed = async () => {
+  const { isAllowed: allowed, error } = await isAllowed();
+  if (error) throw new Error(error);
+  return allowed;
+};
+
+/**
+ * Freighter has no programmatic "disconnect"; the user controls access from
+ * the extension. We clear the granted flag where supported and let the UI
+ * drop its local state so the app behaves as disconnected.
+ */
+export const disconnect = async () => {
+  try {
+    await setAllowed(false);
+  } catch (_) {
+    // Older Freighter builds ignore the argument — safe to swallow.
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Network guard
+// ---------------------------------------------------------------------------
+
+/**
+ * Confirm the wallet is pointed at Testnet so transactions don't silently
+ * target the wrong network.
+ */
+export const assertTestnet = async () => {
+  const { network, error } = await getNetwork();
+  if (error) throw new Error(error);
+  if (network !== NETWORK) {
+    throw new Error(
+      `Freighter is set to "${network}". Switch it to Testnet to use this app.`
+    );
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Balance
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the native XLM balance for a public key. Unfunded accounts (which do
+ * not yet exist on-chain) resolve to "0" instead of throwing.
+ */
+export const getXlmBalance = async (publicKey) => {
+  try {
+    const account = await server.loadAccount(publicKey);
+    const native = account.balances.find((b) => b.asset_type === "native");
+    return native ? native.balance : "0";
+  } catch (error) {
+    if (error?.response?.status === 404) {
+      return "0"; // Account not funded yet on Testnet.
+    }
+    throw error;
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Transactions
+// ---------------------------------------------------------------------------
+
+/**
+ * Build, sign (via Freighter) and submit a native XLM payment on Testnet.
+ *
+ * @param {object} params
+ * @param {string} params.source       Sender public key (the connected wallet).
+ * @param {string} params.destination  Recipient public key.
+ * @param {string} params.amount       Amount of XLM as a string, e.g. "1.5".
+ * @param {string} [params.memo]       Optional text memo.
+ * @returns {Promise<{hash: string}>}  The submitted transaction hash.
+ */
+export const sendPayment = async ({ source, destination, amount, memo }) => {
+  // Validate inputs early with clear messaging.
+  if (!StellarSdk.StrKey.isValidEd25519PublicKey(destination)) {
+    throw new Error("The destination address is not a valid Stellar public key.");
+  }
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+    throw new Error("Enter an amount greater than 0.");
+  }
+
+  await assertTestnet();
+
+  // Load the source account to obtain its current sequence number.
+  const sourceAccount = await server.loadAccount(source);
+
+  let builder = new StellarSdk.TransactionBuilder(sourceAccount, {
+    fee: StellarSdk.BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  }).addOperation(
+    StellarSdk.Operation.payment({
+      destination,
+      asset: StellarSdk.Asset.native(),
+      amount: amount.toString(),
+    })
+  );
+
+  if (memo && memo.trim()) {
+    builder = builder.addMemo(StellarSdk.Memo.text(memo.trim()));
+  }
+
+  const transaction = builder.setTimeout(180).build();
+
+  // Hand the XDR to Freighter for signing.
+  const { signedTxXdr, error } = await signTransaction(transaction.toXDR(), {
+    network: NETWORK,
+    networkPassphrase: NETWORK_PASSPHRASE,
+    address: source,
+  });
+  if (error) throw new Error(error);
+
+  const signedTx = StellarSdk.TransactionBuilder.fromXDR(
+    signedTxXdr,
+    NETWORK_PASSPHRASE
+  );
+
+  // Submit to the network and surface a friendly error on rejection.
+  try {
+    const result = await server.submitTransaction(signedTx);
+    return { hash: result.hash };
+  } catch (submitError) {
+    const codes =
+      submitError?.response?.data?.extras?.result_codes;
+    if (codes) {
+      throw new Error(
+        `Transaction failed: ${codes.transaction || ""} ${
+          (codes.operations || []).join(", ")
+        }`.trim()
+      );
+    }
+    throw submitError;
+  }
+};
