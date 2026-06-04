@@ -221,6 +221,29 @@ body {
   text-decoration: none;
 }
 
+/* Faucet */
+.faucet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.faucet-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.faucet-sub {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.faucet-head .btn {
+  white-space: nowrap;
+}
+
 /* Transaction history */
 .history-head {
   display: flex;

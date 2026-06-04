@@ -13,6 +13,7 @@ import * as StellarSdk from "@stellar/stellar-sdk";
 // Network configuration — this dApp runs against the Stellar Testnet.
 // ---------------------------------------------------------------------------
 export const HORIZON_URL = "https://horizon-testnet.stellar.org";
+export const FRIENDBOT_URL = "https://friendbot.stellar.org";
 export const NETWORK = "TESTNET";
 export const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET;
 
@@ -119,6 +120,37 @@ export const getXlmBalance = async (publicKey) => {
     }
     throw error;
   }
+};
+
+// ---------------------------------------------------------------------------
+// Faucet
+// ---------------------------------------------------------------------------
+
+/**
+ * Request free Testnet XLM for a public key from Friendbot. Funds an account
+ * that does not yet exist; surfaces a friendly message when it's already
+ * funded or otherwise rejected.
+ *
+ * @param {string} publicKey  The account to fund.
+ * @returns {Promise<{hash?: string}>}  The funding transaction hash, if any.
+ */
+export const requestTestnetXlm = async (publicKey) => {
+  const res = await fetch(`${FRIENDBOT_URL}/?addr=${encodeURIComponent(publicKey)}`);
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const detail =
+      data?.detail ||
+      data?.extras?.result_codes?.transaction ||
+      "Friendbot could not fund this account.";
+    // Most common case: the account already has a balance.
+    if (res.status === 400 && /createAccountAlreadyExist|exist/i.test(JSON.stringify(data))) {
+      throw new Error("This account is already funded on Testnet.");
+    }
+    throw new Error(detail);
+  }
+
+  return { hash: data?.hash || data?.id };
 };
 
 // ---------------------------------------------------------------------------

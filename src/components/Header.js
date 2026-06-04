@@ -7,6 +7,7 @@ import {
 } from "./Freighter";
 import SendTransaction from "./SendTransaction";
 import TransactionHistory from "./TransactionHistory";
+import Faucet from "./Faucet";
 
 const Header = () => {
   const [connected, setConnected] = useState(false);
@@ -113,6 +114,8 @@ const Header = () => {
                 Refresh
               </button>
             </div>
+
+            <Faucet publicKey={publicKey} onFunded={refreshAll} />
 
             <SendTransaction publicKey={publicKey} onSent={refreshAll} />
 
